@@ -1,5 +1,7 @@
 mod encrypt;
 use std::fs;
+use std::io::{Read, Write};
+use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 use std::{io, thread};
 
@@ -14,39 +16,109 @@ fn extract<'a>(text: &'a str, prefix: &'a str, suffix: &'a str) -> io::Result<&'
     Err(io::ErrorKind::InvalidData.into())
 }
 
-fn login(username: &str, password: &str) -> io::Result<()> {
-    let resp = minreq::get("http://www.baidu.com")
-        .with_timeout(10)
-        .send()
-        .map_err(|e| {
-            println!("baidu boom! {}", e);
-            io::ErrorKind::ConnectionRefused
-        })?;
-    let resp = resp.as_str().map_err(|e| {
-        println!("invalid resp format {}", e);
-        io::ErrorKind::InvalidData
-    })?;
+fn portal_url(text: &str) -> Option<String> {
+    for (start, _) in text.match_indices("http://") {
+        let candidate = &text[start..];
+        let path = match candidate.find("/eportal/index.jsp?") {
+            Some(path) => path,
+            None => continue,
+        };
+        if candidate[..path].chars().any(char::is_whitespace) {
+            continue;
+        }
+        let end = candidate[path..]
+            .find(|c: char| c.is_whitespace() || matches!(c, '\'' | '"' | '<' | '>'))
+            .map(|offset| path + offset)
+            .unwrap_or(candidate.len());
+        return Some(candidate[..end].to_owned());
+    }
+    None
+}
 
-    if !resp.contains("/eportal/index.jsp")
-        && !resp.contains("<script>top.self.location.href='http://")
-    {
-        return Ok(());
+fn raw_http(host: &str, path: &str) -> io::Result<String> {
+    let mut last_error = None;
+    let mut stream = None;
+    for address in (host, 80).to_socket_addrs()? {
+        match TcpStream::connect_timeout(&address, Duration::from_secs(8)) {
+            Ok(connected) => {
+                stream = Some(connected);
+                break;
+            }
+            Err(error) => last_error = Some(error),
+        }
     }
 
-    let portal_ip = extract(
-        resp,
-        "<script>top.self.location.href='http://",
-        "/eportal/index.jsp",
+    let mut stream = stream
+        .ok_or_else(|| last_error.unwrap_or_else(|| io::ErrorKind::AddrNotAvailable.into()))?;
+    stream.set_read_timeout(Some(Duration::from_secs(8)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(8)))?;
+    write!(
+        stream,
+        "GET {} HTTP/1.1\r\nHost: {}\r\nUser-Agent: hust-network-login\r\nConnection: close\r\n\r\n",
+        path, host
     )?;
-    println!("portal ip: {}", portal_ip);
 
-    let mac = extract(resp, "mac=", "&t=")?;
-    println!("mac: {}", mac);
+    let mut bytes = Vec::new();
+    stream.take(64 * 1024).read_to_end(&mut bytes)?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+fn discover_portal() -> io::Result<Option<String>> {
+    let probes = [
+        ("edge-http.microsoft.com", "/captiveportal/generate_204", ""),
+        ("123.123.123.123", "/", ""),
+        ("detectportal.firefox.com", "/success.txt", "success"),
+        (
+            "www.msftconnecttest.com",
+            "/connecttest.txt",
+            "Microsoft Connect Test",
+        ),
+    ];
+    let mut last_error = None;
+
+    for (host, path, online_marker) in probes {
+        match raw_http(host, path) {
+            Ok(response) => {
+                if let Some(url) = portal_url(&response) {
+                    println!("portal discovered through {host}");
+                    return Ok(Some(url));
+                }
+                let status_204 = response
+                    .lines()
+                    .next()
+                    .is_some_and(|line| line.contains(" 204 "));
+                if status_204 || (!online_marker.is_empty() && response.contains(online_marker)) {
+                    return Ok(None);
+                }
+                println!("unexpected discovery response from {host}");
+            }
+            Err(error) => {
+                println!("discovery failed through {host}: {error}");
+                last_error = Some(error);
+            }
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| io::ErrorKind::InvalidData.into()))
+}
+
+fn login(username: &str, password: &str) -> io::Result<()> {
+    let portal_url = match discover_portal()? {
+        Some(url) => url,
+        None => return Ok(()),
+    };
+
+    let portal_ip = extract(&portal_url, "http://", "/eportal/index.jsp")?;
+    println!("portal host: {portal_ip}");
+
+    let mac = extract(&portal_url, "mac=", "&t=")?;
 
     let encrypt_pass = encrypt::encrypt_pass(format!("{}>{}", password, mac));
 
-    let query_string = extract(resp, "/eportal/index.jsp?", "'</script>\r\n")?;
-    println!("query_string: {}", query_string);
+    let query_string = portal_url
+        .split_once("/eportal/index.jsp?")
+        .map(|(_, query)| query)
+        .ok_or(io::ErrorKind::InvalidData)?;
 
     let query_string = urlencoding::encode(query_string);
 
@@ -77,16 +149,35 @@ fn login(username: &str, password: &str) -> io::Result<()> {
         io::ErrorKind::InvalidData
     })?;
 
-    println!("login resp: {}", resp);
-
     if resp.contains("success") {
+        println!("portal login succeeded");
         Ok(())
     } else {
+        println!("portal login was rejected");
         Err(io::ErrorKind::PermissionDenied.into())
     }
 }
 
 #[test]
+fn extracts_portal_from_redirect_header() {
+    let response = "HTTP/1.1 302 Found\r\nLocation: http://172.18.18.61:8080/eportal/index.jsp?wlanuserip=abc&mac=def&t=wireless-v2\r\n\r\n";
+    assert_eq!(
+        portal_url(response).unwrap(),
+        "http://172.18.18.61:8080/eportal/index.jsp?wlanuserip=abc&mac=def&t=wireless-v2"
+    );
+}
+
+#[test]
+fn extracts_portal_from_script_body() {
+    let response = "<script>top.self.location.href='http://172.18.18.61:8080/eportal/index.jsp?wlanuserip=abc&mac=def&t=wireless-v2'</script>";
+    assert_eq!(
+        portal_url(response).unwrap(),
+        "http://172.18.18.61:8080/eportal/index.jsp?wlanuserip=abc&mac=def&t=wireless-v2"
+    );
+}
+
+#[test]
+#[ignore = "requires access to the HUST campus network"]
 fn login_test() {
     let _ = login("username", "password");
 }
@@ -175,16 +266,24 @@ fn main() {
         .or_else(|| Config::from_file("/etc/hust-network-login/config"))
         .expect("no available configuration found");
 
+    let run_once = std::env::var_os("HUST_NETWORK_LOGIN_ONCE").is_some();
     loop {
-        match login(&config.username, &config.password) {
+        let (success, delay) = match login(&config.username, &config.password) {
             Ok(_) => {
                 println!("login ok. awaiting...");
-                thread::sleep(Duration::from_secs(15));
+                (true, 15)
             }
             Err(e) => {
                 println!("error! {}", e);
-                thread::sleep(Duration::from_secs(1));
+                (false, 1)
             }
+        };
+        if run_once {
+            if success {
+                return;
+            }
+            std::process::exit(1);
         }
+        thread::sleep(Duration::from_secs(delay));
     }
 }

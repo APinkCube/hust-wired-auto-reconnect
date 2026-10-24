@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+          - armv7-unknown-linux-musleabihf
+          - arm-unknown-linux-musleabi
+          - mips-unknown-linux-musl
+          - mipsel-unknown-linux-musl
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build static binary
+        uses: houseabsolute/actions-rust-cross@v1.0.8
+        with:
+          command: build
+          target: ${{ matrix.target }}
+          args: "--locked --release"
+          strip: true
+      - name: Package and checksum
+        run: |
+          archive="hust-network-login-${{ matrix.target }}.tar.gz"
+          tar -C "target/${{ matrix.target }}/release" -czf "$archive" hust-network-login
+          sha256sum "$archive" > "$archive.sha256"
+      - name: Publish release asset
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            hust-network-login-${{ matrix.target }}.tar.gz
+            hust-network-login-${{ matrix.target }}.tar.gz.sha256
