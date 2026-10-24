@@ -1,4 +1,6 @@
 *.conf
 /target
 *.zip
+*.log
 .vscode
+/windows-package

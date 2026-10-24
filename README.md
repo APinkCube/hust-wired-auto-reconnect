@@ -1,6 +1,6 @@
 # HUST 有线校园网自动重连
 
-把 OpenWrt 路由器的 WAN 口接到华中科技大学校园网后，本项目会自动探测 ePortal 认证页、登录，并在断网后持续重试。适合宿舍路由器、软路由和其他需要无人值守运行的 Linux 设备。
+本项目会自动探测华中科技大学 ePortal 认证页、登录，并在断网后持续重试。既支持“电脑直接连接校园网网线”，也支持把程序长期运行在 OpenWrt 路由器上。
 
 > 本项目不是学校官方软件。认证协议或校园网策略变化后可能需要调整；请遵守学校网络使用规定，不要共享账号或绕过并发设备限制。
 
@@ -9,21 +9,58 @@
 - 不再只依赖单个网站，依次使用多个纯 HTTP 连通性入口发现认证页。
 - 同时识别 `Location` 重定向和网页脚本中的 ePortal 地址。
 - 在线时每 15 秒检查一次；掉线或认证失败时快速重试。
+- 提供 Windows 一键安装、开机自启、状态检查和卸载脚本。
 - 提供 OpenWrt `procd` 开机自启和进程拉起脚本。
 - 日志不输出密码、MAC 地址或完整认证参数。
 - 账号配置独立存放，示例配置和 `.gitignore` 可避免误提交凭据。
 
 ## 适用范围
 
-已知目标是 HUST 使用的 ePortal 认证流程。典型拓扑如下：
+已知目标是 HUST 使用的 ePortal 认证流程。可以采用以下任一拓扑：
+
+```text
+方案 A：校园网墙口 ── 网线 ── Windows 电脑
+
+方案 B：校园网墙口 ── 网线 ── OpenWrt WAN 口 ── 你的设备
+```
+
+如果电脑或路由器的有线网口拿不到 IPv4 地址，问题通常发生在 DHCP、墙口开通状态或其他前置认证环节，本程序无法替代这些步骤。
+
+## 先选择你的场景
+
+| 场景 | 推荐方案 | 需要一直开机的设备 | 能直接服务的设备 |
+| --- | --- | --- | --- |
+| 只有 Windows 电脑和网线 | [方案 A：安装到 Windows](#方案-a只有-windows-电脑和网线) | 电脑 | 这台电脑 |
+| 有可刷 OpenWrt 的路由器 | [方案 B：安装到 OpenWrt](#方案-b安装到-openwrt) | 路由器 | 路由器下的多台设备 |
+
+## 方案 A：只有 Windows 电脑和网线
+
+当前正式支持 64 位 Windows 10/11。电脑关机、休眠或拔掉网线后无法继续认证；本方案也不会自动给手机等其他设备共享网络。
+
+1. 从 [Releases](https://github.com/APinkCube/hust-wired-auto-reconnect/releases) 下载 `hust-network-login-x86_64-pc-windows-msvc.zip`。
+2. 解压整个压缩包，将校园网网线插入电脑。
+3. 暂时关闭 Wi-Fi、VPN 和代理，避免探测流量走错接口。
+4. 在解压目录打开管理员 PowerShell，运行：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+安装程序会安全地询问学号和密码、限制配置目录权限，并创建开机自动运行的 `HUST Wired Auto Reconnect` 计划任务。检查状态：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\ProgramData\hust-network-login\check.ps1"
+```
+
+修改凭据、卸载和详细排查步骤见 [Windows 完整指南](windows/README.md)。
+
+## 方案 B：安装到 OpenWrt
+
+典型拓扑：
 
 ```text
 校园网墙口 ── 网线 ── OpenWrt WAN 口 ── 你的设备
 ```
-
-如果 WAN 口拿不到 IPv4 地址，问题通常发生在 DHCP、墙口开通状态或其他前置认证环节，本程序无法替代这些步骤。
-
-## 快速安装到 OpenWrt
 
 ### 1. 选择可执行文件
 
@@ -117,6 +154,7 @@ cross build --release --target aarch64-unknown-linux-musl
 
 ## 排查思路
 
+- Windows 用户先运行 `C:\ProgramData\hust-network-login\check.ps1`，确认计划任务、进程和有线网卡状态。
 - `No such file or directory` 但文件确实存在：通常是下载了错误架构或动态链接产物。
 - 一直显示 `discovery failed`：先确认 WAN 口已获取校园网 IPv4 和默认路由。
 - 显示 `portal login was rejected`：核对账号、密码和学校账号状态。
@@ -129,4 +167,4 @@ cross build --release --target aarch64-unknown-linux-musl
 
 本项目基于 [black-binary/hust-network-login](https://github.com/black-binary/hust-network-login) 修改，保留完整上游提交历史和原作者版权声明，并继续采用 [MIT License](LICENSE)。感谢原作者和历次贡献者。
 
-本仓库新增内容主要来自一次真实的宿舍有线网/OpenWrt 部署整理，目的是给后续同学提供可复用、可审查的参考实现。
+本仓库新增内容主要来自真实的宿舍有线网部署整理，覆盖 Windows 电脑直连和 OpenWrt 路由器两种场景，目的是给后续同学提供可复用、可审查的参考实现。
