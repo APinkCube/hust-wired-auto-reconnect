@@ -1,5 +1,7 @@
 name: Release
 
+# Build static OpenWrt-friendly binaries for version tags.
+
 on:
   push:
     tags:
