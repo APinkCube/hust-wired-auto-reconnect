@@ -212,12 +212,9 @@ impl Config {
             .inspect_err(|err| println!("failed to read environment variable: {err}"))
             .ok();
 
-        let result = Self::validate_and_assemble(
-            username.as_deref(),
-            password.as_deref(),
-        )
-        .inspect_err(|err| println!("invalid configuration: {err}"))
-        .ok()?;
+        let result = Self::validate_and_assemble(username.as_deref(), password.as_deref())
+            .inspect_err(|err| println!("invalid configuration: {err}"))
+            .ok()?;
 
         Some(result)
     }
