@@ -1,6 +1,6 @@
 [package]
 name = "hust-network-login"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["black-binary <blackbinary@qq.com>"]
 edition = "2021"
 description = "HUST wired campus network login and automatic reconnection for OpenWrt"

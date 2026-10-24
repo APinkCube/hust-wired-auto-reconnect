@@ -41,10 +41,10 @@ opkg print-architecture
 | `x86_64` | `x86_64-unknown-linux-musl` |
 | `aarch64` | `aarch64-unknown-linux-musl` |
 | `armv7l` | `armv7-unknown-linux-musleabihf` |
-| `mips` | `mips-unknown-linux-musl` |
-| `mipsel` | `mipsel-unknown-linux-musl` |
 
 拿不准时，不要强行运行；在 Issue 中附上以上两条命令的输出即可。
+
+当前 Rust stable 已不再分发本项目原先使用的 MIPS/MIPSel 标准库，因此自动 Release 暂不包含这两类旧路由器；这类设备需要使用兼容的旧工具链自行交叉编译。
 
 ### 2. 上传并安装
 
