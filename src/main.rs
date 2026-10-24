@@ -213,8 +213,8 @@ impl Config {
             .ok();
 
         let result = Self::validate_and_assemble(
-            username.as_ref().map(String::as_str),
-            password.as_ref().map(String::as_str),
+            username.as_deref(),
+            password.as_deref(),
         )
         .inspect_err(|err| println!("invalid configuration: {err}"))
         .ok()?;
@@ -225,7 +225,7 @@ impl Config {
     pub fn from_file(path: &str) -> Option<Self> {
         println!("reading configuration from file: {path}");
 
-        let raw = fs::read(&path)
+        let raw = fs::read(path)
             .inspect_err(|err| println!("failed to read from {path}: {err}"))
             .ok()?;
 
