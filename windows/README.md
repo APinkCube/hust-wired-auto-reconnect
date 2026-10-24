@@ -12,7 +12,7 @@
 
 ## 安装
 
-1. 在项目 [Releases](https://github.com/APinkCube/hust-wired-auto-reconnect/releases) 中下载 `hust-network-login-x86_64-pc-windows-msvc.zip`。
+1. 在项目 [Releases](https://github.com/APinkCube/hust-wired-auto-reconnect/releases) 中下载 `hust-network-login-x86_64-pc-windows-msvc.zip` 和同名 `.sha256` 文件。
 2. 解压整个压缩包，不要只取出 `.exe`。
 3. 将校园网网线插入电脑，并确认 Windows 的“以太网”显示已连接。
 4. 右键开始菜单，打开“终端（管理员）”或“Windows PowerShell（管理员）”。
@@ -21,6 +21,15 @@
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
+
+运行前可以核对下载文件：
+
+```powershell
+Get-FileHash .\hust-network-login-x86_64-pc-windows-msvc.zip -Algorithm SHA256
+Get-Content .\hust-network-login-x86_64-pc-windows-msvc.zip.sha256
+```
+
+两处哈希值应完全一致。本项目是个人维护的开源软件，暂未购买 Windows 代码签名证书，因此 Windows Defender SmartScreen 可能显示“未知发布者”。请先确认下载地址是本仓库并完成哈希校验，再决定是否运行；不要关闭系统安全软件。
 
 安装程序会询问学号和校园网密码。密码输入不会回显，配置会保存到：
 

@@ -37,7 +37,7 @@
 
 当前正式支持 64 位 Windows 10/11。电脑关机、休眠或拔掉网线后无法继续认证；本方案也不会自动给手机等其他设备共享网络。
 
-1. 从 [Releases](https://github.com/APinkCube/hust-wired-auto-reconnect/releases) 下载 `hust-network-login-x86_64-pc-windows-msvc.zip`。
+1. 从 [Releases](https://github.com/APinkCube/hust-wired-auto-reconnect/releases) 下载 `hust-network-login-x86_64-pc-windows-msvc.zip` 和同名 `.sha256` 校验文件。
 2. 解压整个压缩包，将校园网网线插入电脑。
 3. 暂时关闭 Wi-Fi、VPN 和代理，避免探测流量走错接口。
 4. 在解压目录打开管理员 PowerShell，运行：
